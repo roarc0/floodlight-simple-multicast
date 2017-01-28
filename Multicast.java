@@ -179,19 +179,14 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, portList);
 			return Command.STOP;
 		}
-		else if (destAddr.isMulticast() && (pkt.getPayload() instanceof TCP))
+		else if (destAddr.isMulticast())
 		{
-			/* for TCP packets addressed to IPv4 multicast from host not part of group
+			/* for any other packet addressed to IPv4 multicast from host not part of group
 			 * we define a new flow mod to drop packets from this host */
-			log.info("TCP_PACKET: " + hostAddr.toString() + " >> " + destAddr.toString() + ": droping host...");
-			if (! groupDb.checkHost(destAddr, hostAddr))
+			if (! groupDb.checkHost(destAddr, hostAddr)) {
+				log.info("NON_UDP_PACKET : " + hostAddr.toString() + " >> " + destAddr.toString() + ": droping host...");
 				newFlowMod(sw, pi, hostAddr, hostMac, destAddr, null);
-			return Command.STOP;
-		}
-		else if (destAddr.isMulticast()) {
-			/* packets that are neither TCP or UDP
-			 * ICMP? */
-			log.warn("???_PACKET: this is not handled!");
+			}
 			return Command.STOP;
 		}
 
