@@ -4,6 +4,15 @@ import sys, os, socket, struct, time
 sockR = None
 sockS = None
 
+NORMAL=''
+GREEN='\033[92m'
+RED='\033[91m'
+YELLOW='\033[93m'
+ENDC='\033[0m'
+
+def colorPrint(type, message):
+	print(type + message + ENDC)
+
 def multicastJoin(sock, groupAddr):
 	mreq = struct.pack("4sl", socket.inet_aton(groupAddr), socket.INADDR_ANY)
 	sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
@@ -15,7 +24,7 @@ def multicastLeave(sock, groupAddr):
 def multicastRecv(groupAddr, groupPort, join, count):
 	global sockR
 	if sockR is None:
-		print("*** creating recv socket ***")
+		colorPrint(YELLOW, "*** creating recv socket ***")
 		sockR = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 		sockR.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		sockR.bind((groupAddr, groupPort))  # use groupAddr instead of '' to listen only
@@ -24,15 +33,16 @@ def multicastRecv(groupAddr, groupPort, join, count):
 			multicastJoin(sockR, groupAddr)
 
 	while count>0:
-		print("recv from " + groupAddr  + ":" + str(groupPort) +  " < \"" + str(sockR.recv(10240),'utf-8') + "\"" )
+		colorPrint(RED, "recv from " + groupAddr  + ":" + str(groupPort) +  " < \"" + str(sockR.recv(10240),'utf-8') + "\"" )
 		count-=1
 
 def multicastSend(groupAddr, groupPort, join, count, message, sleepTime):
 	global sockS
 	if sockS is None:
-		print("*** creating send socket ***")
+		colorPrint(YELLOW, "*** creating send socket ***")
 		sockS = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 		sockS.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+		sockS.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)
 
 		if join:
 			multicastJoin(sockS, groupAddr)
@@ -42,7 +52,7 @@ def multicastSend(groupAddr, groupPort, join, count, message, sleepTime):
 		cnt = '_' + str(i)
 		if i <= 1:
 			cnt=''
-		print("send to   "  + groupAddr  + ":" + str(groupPort) +  " > \"" + message + cnt + "\"")
+		colorPrint(GREEN, "send to   "  + groupAddr  + ":" + str(groupPort) +  " > \"" + message + cnt + "\"")
 		sockS.sendto(bytes(message + cnt,'utf-8'), (groupAddr, groupPort))
 		count-=1
 		i+=1

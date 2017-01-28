@@ -18,11 +18,9 @@ public class MulticastWebRoutable implements RestletRoutable {
 		router.attach("/controller/summary/json", ControllerSummaryResource.class);
 		router.attach("/module/loaded/json", LoadedModuleLoaderResource.class);
 		router.attach("/controller/switches/json", ControllerSwitchesResource.class);
-
 		router.attach("/groups_info/json", GroupsInfoResource.class);
 		//router.attach("/group_info/json", GroupsInfoResource.class);
 		router.attach("/group_create/json", GroupCreateResource.class);
-
 		return router;
 	}
 

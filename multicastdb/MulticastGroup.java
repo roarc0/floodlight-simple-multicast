@@ -61,6 +61,17 @@ public class MulticastGroup {
 		return hosts;
 	}
 
+	public MCHost getHost(IPv4Address addr) {
+		MCHost h_ret = null;
+		for(MCHost h : hosts) {
+			if (addr.compareTo(h.addr) == 0) {
+				h_ret = h;
+				break;
+			}
+		}
+		return h_ret;
+	}
+	
 	public MulticastGroup addHost(IPv4Address addr, MacAddress mac, DatapathId dpid, OFPort port) {
 		hosts.add(new MCHost(addr, mac, dpid, port));
 		return this;
