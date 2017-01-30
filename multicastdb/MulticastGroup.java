@@ -10,17 +10,18 @@ import org.projectfloodlight.openflow.types.OFPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// class used to describe a single group
 public class MulticastGroup {
 	protected static final Logger log = LoggerFactory.getLogger(MulticastGroup.class);
 
 	private IPv4Address addr;
 	
+	// class used to identify a single host
 	public class MCHost {
-		public IPv4Address addr;
-		// ADD socket port ?
-		public MacAddress  mac;
-		public DatapathId  dpid;
-		public OFPort port;
+		public IPv4Address addr; // host address
+		public MacAddress  mac;  // host mac address
+		public DatapathId  dpid; // host is attached to this switch
+		public OFPort port;      // host is attached to this port of the switch
 		
 		MCHost(IPv4Address addr, MacAddress mac, DatapathId  dpid, OFPort port) {
 			this.addr = addr;
@@ -31,21 +32,10 @@ public class MulticastGroup {
 	};
 	
 	private List<MCHost> hosts;
-	private int lifetime;
-
-	public int getLifetime() {
-		return lifetime;
-	}
-
-	public MulticastGroup setLifetime(int lifetime) {
-		this.lifetime = lifetime;
-		return this;
-	}
 
 	public MulticastGroup(String group_addr) {
 		addr = IPv4Address.of(group_addr);
 		hosts = new ArrayList<MCHost>();
-		lifetime = 60;
 	}
 
 	public IPv4Address getAddr() {
@@ -57,10 +47,12 @@ public class MulticastGroup {
 		return this;
 	}
 
+	// retuns all hosts
 	public List<MCHost> getHosts() {
 		return hosts;
 	}
 
+	// returns a MCHost given the address
 	public MCHost getHost(IPv4Address addr) {
 		MCHost h_ret = null;
 		for(MCHost h : hosts) {
@@ -72,11 +64,13 @@ public class MulticastGroup {
 		return h_ret;
 	}
 	
+	// add host to group
 	public MulticastGroup addHost(IPv4Address addr, MacAddress mac, DatapathId dpid, OFPort port) {
 		hosts.add(new MCHost(addr, mac, dpid, port));
 		return this;
 	}
 
+	// delete host from group
 	public MulticastGroup deleteHost(IPv4Address addr) {
 		MCHost h_del = null;
 		for(MCHost h : hosts) {

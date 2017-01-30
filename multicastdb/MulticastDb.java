@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import net.floodlightcontroller.multicast.multicastdb.MulticastGroup;
 import net.floodlightcontroller.multicast.multicastdb.MulticastGroup.MCHost;
 
+// Class used to manage groups
 public class MulticastDb {
 	protected static final Logger log = LoggerFactory.getLogger(MulticastDb.class);
 	private List<MulticastGroup> db;
@@ -27,25 +28,37 @@ public class MulticastDb {
 		return db.size();
 	}
 
+	// returns an object used by rest interface for single group information
 	public Map<String, Object> getGroupDescription(String groupAddr) {
 		Map<String, Object> map = new HashMap<String, Object>();
 		MulticastGroup group = getGroup(groupAddr);
-		for( int i = 0; i < group.getHosts().size(); i++) {
-			map.put("addr",  group.getHosts().get(i).addr.toString());
-		}
-		return map;
-	}
-	
-	public Map<String, Object> getGroupsDescription() {
-		Map<String, Object> map = new HashMap<String, Object>();
-		for( MulticastGroup group : db) {
-			IPv4Address groupAddr = group.getAddr();
-			map.put("group_addr",  groupAddr.toString());
-			map.put("hosts", (Object) this.getGroupDescription(groupAddr.toString()));
+		int i = 0;
+		if (group != null && group.getHosts() != null) {
+			for(MCHost host : group.getHosts()) {
+				String ghost = host.addr.toString() + ", " + host.mac.toString() +
+						       ", " + host.dpid.toString() + ", " + host.port.toString();  
+				map.put("host_" + i, ghost);
+				i++;
+			}
 		}
 		return map;
 	}
 
+	// returns an object used by rest interface to list all groups
+	public Map<String, Object> getGroupsDescription() {
+		Map<String, Object> map = new HashMap<String, Object>();
+		String gaddrs = "";
+		for( MulticastGroup group : db) {
+			IPv4Address groupAddr = group.getAddr();
+			gaddrs += group.getAddr().toString() + ", ";
+		}
+		if (gaddrs.length() > 2)
+			gaddrs = gaddrs.substring(0, gaddrs.length()-2);
+		map.put("groups", gaddrs);
+		return map;
+	}
+
+	// returns instance of group referenced by addr
 	public MulticastGroup getGroup(String groupAddr) {
 		for(MulticastGroup g : db) {
 			if (g.getAddr().toString().equals(groupAddr)) {
@@ -55,10 +68,12 @@ public class MulticastDb {
 		return null;
 	}
 
+	// returns instance of group referenced by addr
 	public MulticastGroup getGroup(IPv4Address groupAddr) {
 		return getGroup(groupAddr.toString());
 	}
 
+	// called by rest interface, creates a new group
 	public boolean createGroup(String groupAddr) {
 		if (getGroup(groupAddr) == null) {
 			db.add(new MulticastGroup(groupAddr));		
@@ -70,6 +85,7 @@ public class MulticastDb {
 		return false;
 	}
 	
+	// deletes a group.
 	public boolean deleteGroup(String groupAddr) { // TODO not tested 
 		for(MulticastGroup g : db) {
 			if (g.getAddr().toString().equals(groupAddr)) {
@@ -80,6 +96,7 @@ public class MulticastDb {
 		return false;
 	}
 	
+	// called upon IGMP join
 	public boolean joinGroup(IPv4Address groupAddr, IPv4Address hostAddr, MacAddress hostMac, DatapathId dpid, OFPort port) {
 		MulticastGroup group = getGroup(groupAddr.toString());
 		
@@ -88,6 +105,7 @@ public class MulticastDb {
 			return false;
 		}	
 
+		// if not already in group
 		if (!checkHost(groupAddr.toString(), hostAddr.toString())) {
 			group.addHost(hostAddr, hostMac, dpid, port);
 			log.info("Adding a new host to multicast group: " +
@@ -100,6 +118,7 @@ public class MulticastDb {
 		return false;
 	}
 	
+	// called upon IGMP leave.
 	public boolean leaveGroup(IPv4Address groupAddr, IPv4Address hostAddr) {
 		MulticastGroup group = getGroup(groupAddr.toString());
 		
@@ -113,10 +132,12 @@ public class MulticastDb {
 		return true;
 	}
 
+	// check if host is in group
 	public boolean checkHost(IPv4Address groupAddr, IPv4Address hostAddr) {
 		return checkHost(groupAddr.toString(), hostAddr.toString());
 	}
 
+	// check if host is in group
 	public boolean checkHost(String groupAddr, String hostAddr) {
 		MulticastGroup group = getGroup(groupAddr);
 

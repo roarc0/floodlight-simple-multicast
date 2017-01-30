@@ -10,6 +10,7 @@ import net.floodlightcontroller.core.web.LoadedModuleLoaderResource;
 import net.floodlightcontroller.multicast.resources.*;
 import net.floodlightcontroller.restserver.RestletRoutable;
 
+// connect rest resources
 public class MulticastWebRoutable implements RestletRoutable {
 
 	@Override
@@ -19,7 +20,7 @@ public class MulticastWebRoutable implements RestletRoutable {
 		router.attach("/module/loaded/json", LoadedModuleLoaderResource.class);
 		router.attach("/controller/switches/json", ControllerSwitchesResource.class);
 		router.attach("/groups_info/json", GroupsInfoResource.class);
-		//router.attach("/group_info/json", GroupsInfoResource.class);
+		router.attach("/group_info/json", GroupInfoResource.class);
 		router.attach("/group_create/json", GroupCreateResource.class);
 		return router;
 	}

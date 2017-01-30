@@ -51,10 +51,13 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 	protected static final Logger log = LoggerFactory.getLogger(Multicast.class);
 	protected IFloodlightProviderService floodlightProvider;
 	protected IRestApiService restApiService;
+	// we need routing informations to know the ports where to forward packets
 	protected IRoutingService routingService;
 	
+	// store groups,hosts in this class
 	protected MulticastDb groupDb;
 	
+	// flow mod rules timeouts
 	private static short IDLE_TIMEOUT = 20;
 	private static short HARD_TIMEOUT = 40;
 
@@ -103,7 +106,7 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		routingService = context.getServiceImpl(IRoutingService.class);
-		// This class manages group status
+		// create an empty db
 		groupDb = new MulticastDb();
 		log.info("Startup MULTICAST module");
 	}
@@ -122,25 +125,31 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		OFPacketIn pi = (OFPacketIn) msg;
 		OFPort inPort = pi.getMatch().get(MatchField.IN_PORT);
 
+		// this module handles only IPv4 multicast
 		if (! (eth.isMulticast()  && (pkt instanceof IPv4)))
 			return Command.CONTINUE;
 
+		// extract informations from packet-in
 		IPv4 pktIPv4 = (IPv4) pkt;
 		IPv4Address destAddr = pktIPv4.getDestinationAddress();
 		IPv4Address hostAddr = pktIPv4.getSourceAddress();
 		MacAddress hostMac = eth.getSourceMACAddress();
 
+		// if packet is addressed to 224.0.0.22 it should be an IGMP
 		if (destAddr.equals(IPv4Address.of("224.0.0.22"))) {
+			// quick way to extract needed informations. instead of extending basepacket from floodlight
 			ByteBuffer bbIGMP = ByteBuffer.wrap(pktIPv4.getPayload().serialize());
 			byte igmpType = bbIGMP.get();
 			short numRecords = bbIGMP.getShort(6);
-			//log.info("IGMP_MEMBERSHIP_REPORT_v3 numRecords: " + String.valueOf(numRecords));
-			
+
 			switch (igmpType) {
+				// we handle only this case
 				case 0x22:
+					// it might contain more records
 					for (int i = 0; i<numRecords; i++) {
 						byte groupRecordType = bbIGMP.get(i*8 + 8);
 						IPv4Address groupAddr = IPv4Address.of(bbIGMP.getInt(i*8 + 12));
+						// see recordType to tell if it is a join or leave
 						switch(groupRecordType) {
 							case 0x04:
 								log.info("IGMP_MEMBERSHIP_REPORT_v3 JOIN : " + hostAddr.toString() + " >> " + groupAddr.toString());
@@ -162,31 +171,35 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 
 			return Command.STOP;
 		}
+		// Otherwise if it is UDP
 		else if (destAddr.isMulticast() && (pkt.getPayload() instanceof UDP)) {
 			UDP pktUDP = (UDP) pktIPv4.getPayload();
 			List<OFPort> portList = null;
 
+			// Host is trying to send UDP packets to the group but it's not subscribed
 			if (! groupDb.checkHost(destAddr, hostAddr)) {
-				/* Host is trying to send UDP packets to the group but it's not subscribed */
 				log.warn("UDP_PACKET : " + hostAddr.toString() + " >> " +
 				destAddr.toString() + ":" + pktUDP.getDestinationPort().getPort() + " : host is not part of the group, dropping");
 			}
 			else {
 				log.info("UDP_PACKET : " + hostAddr.toString() + " >> " +
 						destAddr.toString() + ":" + pktUDP.getDestinationPort().getPort() + " : generating flow mod...");
+				// generate a list containing the ports on this switch where to forward packets.
 				portList = getPorts(destAddr, dpid, inPort);
 			}
+			/* generate flow mod using that list :
+			 * if host is in db the port list shouldn't be null.
+			 * if host is not in db the port list is null and it will be dropped.
+			 * */
 			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, portList);
 			return Command.STOP;
 		}
 		else if (destAddr.isMulticast())
 		{
-			/* for any other packet addressed to IPv4 multicast from host not part of group
-			 * we define a new flow mod to drop packets from this host */
-			if (! groupDb.checkHost(destAddr, hostAddr)) {
-				log.info("NON_UDP_PACKET : " + hostAddr.toString() + " >> " + destAddr.toString() + ": droping host...");
-				newFlowMod(sw, pi, hostAddr, hostMac, destAddr, null);
-			}
+			/* for any other packet addressed to IPv4 multicast
+			 * we define a new flow mod to drop these packets */
+			log.info("NON_UDP_PACKET : " + hostAddr.toString() + " >> " + destAddr.toString() + ": droping host...");
+			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, null);
 			return Command.STOP;
 		}
 
@@ -198,15 +211,22 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		 MulticastGroup group = groupDb.getGroup(groupAddr);
 
 		 if (group != null) {
+			 /* for each host in group check if we have to include the port on the switch
+			  * in order to reach it */
 			 for (MCHost host : group.getHosts()) {
+				// hosts in db is attached to the same switch
 				if (host.dpid == srcDpid) {
-					// hosts attached to the same switch
-					 if (srcPort != host.port && !ports.contains(host.port))
+					/* add if port is not already in list and it is different 
+					 * from the port from which the packet-in came */
+					if (srcPort != host.port && !ports.contains(host.port))
 						ports.add(host.port);
 				}
 				else {
-					// hosts attached to different switches
+					/* Hosts attached to different switches access to routing info to find
+					 * the port on the current switch where to find the host in db. */
 					OFPort destPort = routingService.getPath(srcDpid, host.dpid).getPath().get(0).getPortId();
+					/* add if port is not already in list and it is different 
+					 * from the port from which the packet-in came */
 					if (srcPort != destPort && !ports.contains(destPort))
 						ports.add(destPort);
 				}
@@ -222,12 +242,13 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		else
 			log.info("FLOW_MOD   : " + host + " >> " + dest + " drop host");
 		
+		// Set parameters of flow mod and timeouts.
 		OFFlowAdd.Builder fmb = sw.getOFFactory().buildFlowAdd();
 		fmb.setIdleTimeout(IDLE_TIMEOUT).setHardTimeout(HARD_TIMEOUT)
 		.setBufferId(OFBufferId.NO_BUFFER).setOutPort(OFPort.ANY)
 		.setCookie(U64.of(0)).setPriority(FlowModUtils.PRIORITY_MAX);
 
-		// Create the match structure  
+		// Create the match structure   
 		Match.Builder mb = sw.getOFFactory().buildMatch();
 		mb.setExact(MatchField.ETH_TYPE, EthType.IPv4)
 		.setExact(MatchField.IPV4_DST, dest)
@@ -235,8 +256,8 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		.setExact(MatchField.ETH_SRC, hostMac)
 		.setExact(MatchField.IN_PORT, pi.getMatch().get(MatchField.IN_PORT));
 
+		// translate the list into a list of actions
 		ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-
 		if (ports != null) {
 			if ( ports.size() != 0) {
 				for (OFPort port : ports)
@@ -249,6 +270,11 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 
 		sw.write(fmb.setActions(actionList).setMatch(mb.build()).build());
 
+		/* Send back the packet to the switch 
+		 * it must be returned even if the flow mod has no action
+		 * which translates to dropping the packet.
+		 * The switch doesn't know if controller wants to drop it;
+		 * it may be keeping it buffered. */
 		if (ports != null && ports.size() != 0)
 			returnPacketToSwitch(sw, pi, actionList);
 	}
@@ -278,11 +304,6 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 	@Override
 	public Map<String, Object> getGroupInfo(String groupAddr) {
 		return groupDb.getGroupDescription(groupAddr);
-	}
-
-	@Override
-	public void setLifetime(int value) {
-		// TODO STUB
 	}
 
 	@Override
