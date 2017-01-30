@@ -86,7 +86,25 @@ def restCreateGroup(groupAddr):
 	print("http status: " + str(res.status))
 	print("http response: \"" + str(res.data,'utf-8') + "\"")
 
-def restInfo():
+def restGroupInfo(groupAddr):
+	import urllib3, json
+	url = "http://127.0.0.1:8080/mc/group_info/json"
+	encoded_body = json.dumps({"group_addr": groupAddr})
+
+	try:
+		http = urllib3.PoolManager()
+		res = http.request('POST', url,
+			headers={'Content-Type': 'application/json'},
+			body=encoded_body)
+	except:
+		print("Please, start FloodLight")
+		print("Unexpected error: ", sys.exc_info()[0])
+		sys.exit(2)
+	 
+	print("http status: " + str(res.status))
+	print("http response: " + str(res.data,'utf-8'))
+
+def restGroupsInfo():
 	import urllib3, json
 	url = "http://127.0.0.1:8080/mc/groups_info/json"
 
@@ -132,7 +150,8 @@ def help():
 	print("\t-g --group=    : [PAR] group IPv4 addres")
 	print("\t-p --port=     : [PAR] group port")
 	print("\t-c --create    : [ACT] rest HTTP create group")
-	print("\t-i --info      : [ACT] rest HTTP info about existing groups")
+	print("\t-I --groupinfo : [ACT] rest HTTP info about an existing group")
+	print("\t-i --groupsinfo: [ACT] rest HTTP info about existing groups")
 	print("\t-j --join=     : [OPT] flag to send IGMP join packet or not")
 	print("\t-r --recv      : [ACT] receives for $count times")
 	print("\t-s --send      : [ACT] send $msg for $count times")
@@ -158,7 +177,7 @@ def main(argv):
 	sleepTime=2
 
 	try:
-		opts, args = getopt.getopt(argv, "hg:p:cjrsm:iC:aS:", ["help", "group=", "port=", "create", "join=", "recv", "send", "message=", "info", "count", "alternate","sleep="])
+		opts, args = getopt.getopt(argv, "hg:p:cjrsm:iI:C:aS:", ["help", "group=", "port=", "create", "join=", "recv", "send", "message=", "groupinfo", "groupsinfo=", "count", "alternate","sleep="])
 	except getopt.GetoptError:
 		help()
 		sys.exit(2)
@@ -180,8 +199,10 @@ def main(argv):
 			action = 's'		
 		elif opt in ("-m", "--message"):
 			message = arg		
-		elif opt in ("-i", "--info"):
+		elif opt in ("-i", "--groupsinfo"):
 			action = 'i'
+		elif opt in ("-I", "--groupinfo"):
+			action = 'I'
 		elif opt in ("-C", "--count"):
 			count = int(arg)
 		elif opt in ("-S", "--sleep"):
@@ -203,7 +224,9 @@ def main(argv):
 		print("send...")
 		multicastSend(groupAddr, groupPort, joinFlag, count, message, sleepTime)
 	elif action == 'i':
-		restInfo()
+		restGroupsInfo()
+	elif action == 'I':
+		restGroupInfo(groupAddr)
 	elif action == 'a' and (not None in [groupAddr,groupPort]):
 		print("send/recv...")
 		multicastAlternate(groupAddr, groupPort, joinFlag, count, message, sleepTime)
