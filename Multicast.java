@@ -19,9 +19,11 @@ import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.IpProtocol;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.PacketType;
 import org.projectfloodlight.openflow.types.U64;
 
 import net.floodlightcontroller.core.FloodlightContext;
@@ -36,6 +38,7 @@ import net.floodlightcontroller.multicast.multicastdb.MulticastDb;
 import net.floodlightcontroller.multicast.multicastdb.MulticastGroup;
 import net.floodlightcontroller.multicast.multicastdb.MulticastGroup.MCHost;
 import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.ICMP;
 import net.floodlightcontroller.packet.IPacket;
 import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.packet.TCP;
@@ -60,6 +63,7 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 	// flow mod rules timeouts
 	private static short IDLE_TIMEOUT = 20;
 	private static short HARD_TIMEOUT = 40;
+	private boolean GEN_FULL_TREE = false;
 
 	@Override
 	public String getName() {
@@ -172,18 +176,26 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 			return Command.STOP;
 		}
 		// Otherwise if it is UDP
-		else if (destAddr.isMulticast() && (pkt.getPayload() instanceof UDP)) {
-			UDP pktUDP = (UDP) pktIPv4.getPayload();
+		else if (destAddr.isMulticast() &&
+				( (pkt.getPayload() instanceof UDP) || (pkt.getPayload() instanceof ICMP) )) {
 			List<OFPort> portList = null;
+			boolean isUDP = pkt.getPayload() instanceof UDP;
+			String sPType = "ICMP"; // default if not UDP
+			String sExtra = ""; // UDP has extra port number
+			if (isUDP) {
+				sPType = "UDP";
+				UDP pktUDP = (UDP) pktIPv4.getPayload();
+				sExtra = ":" + pktUDP.getDestinationPort().getPort();
+			}
 
-			// Host is trying to send UDP packets to the group but it's not subscribed
+			// Host is trying to send UDP/ICMP packets to the group but it's not subscribed
 			if (! groupDb.checkHost(destAddr, hostAddr)) {
-				log.warn("UDP_PACKET : " + hostAddr.toString() + " >> " +
-				destAddr.toString() + ":" + pktUDP.getDestinationPort().getPort() + " : host is not part of the group, dropping");
+				log.warn( sPType + "_PACKET : " + hostAddr.toString() + " >> " +
+				destAddr.toString() + sExtra + " : host is not part of the group, dropping");
 			}
 			else {
-				log.info("UDP_PACKET : " + hostAddr.toString() + " >> " +
-						destAddr.toString() + ":" + pktUDP.getDestinationPort().getPort() + " : generating flow mod...");
+				log.info(sPType + "_PACKET : " + hostAddr.toString() + " >> " +
+						destAddr.toString() + sExtra + " : generating flow mod...");
 				// generate a list containing the ports on this switch where to forward packets.
 				portList = getPorts(destAddr, dpid, inPort);
 			}
@@ -191,7 +203,7 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 			 * if host is in db the port list shouldn't be null.
 			 * if host is not in db the port list is null and it will be dropped.
 			 * */
-			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, portList);
+			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, portList, isUDP);
 			return Command.STOP;
 		}
 		else if (destAddr.isMulticast())
@@ -199,10 +211,9 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 			/* for any other packet addressed to IPv4 multicast
 			 * we define a new flow mod to drop these packets */
 			log.info("NON_UDP_PACKET : " + hostAddr.toString() + " >> " + destAddr.toString() + ": droping host...");
-			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, null);
+			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, null, false);
 			return Command.STOP;
 		}
-
 		return Command.CONTINUE;
 	}
 
@@ -232,11 +243,10 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 				}
 			}
 		}
-
 		return ports;
 	}
 
-	public void newFlowMod(IOFSwitch sw, OFPacketIn pi, IPv4Address host, MacAddress hostMac, IPv4Address dest, List<OFPort> ports) {
+	public void newFlowMod(IOFSwitch sw, OFPacketIn pi, IPv4Address host, MacAddress hostMac, IPv4Address dest, List<OFPort> ports, boolean isUDP) {
 		if (ports != null)
 			log.info("FLOW_MOD   : " + host + " >> " + dest + " switch ports: " + Arrays.toString(ports.toArray()));
 		else
@@ -259,7 +269,12 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		// translate the list into a list of actions
 		ArrayList<OFAction> actionList = new ArrayList<OFAction>();
 		if (ports != null) {
-			if ( ports.size() != 0) {
+			if (isUDP)
+				mb.setExact(MatchField.IP_PROTO, IpProtocol.UDP);
+			else
+				mb.setExact(MatchField.IP_PROTO, IpProtocol.ICMP);
+
+			if (ports.size() != 0) {
 				for (OFPort port : ports)
 					actionList.add(
 						sw.getOFFactory().actions().buildOutput().setMaxLen(0xFFffFFff).setPort(port).build());

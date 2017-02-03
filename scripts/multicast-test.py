@@ -140,7 +140,7 @@ def defaultRoute():
 	if testNetwork('239.1.1.1'):
 		return
 	print("adding default route")
-	os.system('i=$(cat /proc/net/dev | grep eth | awk \'{print substr($1, 1, length($1)-1)}\') ; route add -net 0.0.0.0/32 dev $i')
+	os.system('i=$(cat /proc/net/dev | grep eth | awk \'{print substr($1, 1, length($1)-1)}\') ; route add -net 0.0.0.0/32 dev $i; sysctl net.ipv4.icmp_echo_ignore_broadcasts=0')
 	testNetwork('239.1.1.1')
 
 def help():
