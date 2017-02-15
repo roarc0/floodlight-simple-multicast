@@ -33,6 +33,7 @@ public class MulticastDb {
 		Map<String, Object> map = new HashMap<String, Object>();
 		MulticastGroup group = getGroup(groupAddr);
 		int i = 0;
+		log.info("Searching in group: " + groupAddr);
 		if (group != null && group.getHosts() != null) {
 			for(MCHost host : group.getHosts()) {
 				String ghost = host.addr.toString() + ", " + host.mac.toString() +
@@ -61,7 +62,7 @@ public class MulticastDb {
 	// returns instance of group referenced by addr
 	public MulticastGroup getGroup(String groupAddr) {
 		for(MulticastGroup g : db) {
-			if (g.getAddr().toString().equals(groupAddr)) {
+			if (g.getAddr().toString().compareTo(groupAddr) == 0) {
 				return g;
 			}
 		}

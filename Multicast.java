@@ -63,7 +63,6 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 	// flow mod rules timeouts
 	private static short IDLE_TIMEOUT = 20;
 	private static short HARD_TIMEOUT = 40;
-	private boolean GEN_FULL_TREE = false;
 
 	@Override
 	public String getName() {
@@ -203,15 +202,15 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 			 * if host is in db the port list shouldn't be null.
 			 * if host is not in db the port list is null and it will be dropped.
 			 * */
-			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, portList, isUDP);
+			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, portList);
 			return Command.STOP;
 		}
 		else if (destAddr.isMulticast())
 		{
 			/* for any other packet addressed to IPv4 multicast
 			 * we define a new flow mod to drop these packets */
-			log.info("NON_UDP_PACKET : " + hostAddr.toString() + " >> " + destAddr.toString() + ": droping host...");
-			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, null, false);
+			log.info("***_PACKET : " + hostAddr.toString() + " >> " + destAddr.toString() + ": droping host...");
+			newFlowMod(sw, pi, hostAddr, hostMac, destAddr, null);
 			return Command.STOP;
 		}
 		return Command.CONTINUE;
@@ -246,7 +245,7 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		return ports;
 	}
 
-	public void newFlowMod(IOFSwitch sw, OFPacketIn pi, IPv4Address host, MacAddress hostMac, IPv4Address dest, List<OFPort> ports, boolean isUDP) {
+	public void newFlowMod(IOFSwitch sw, OFPacketIn pi, IPv4Address host, MacAddress hostMac, IPv4Address dest, List<OFPort> ports) {
 		if (ports != null)
 			log.info("FLOW_MOD   : " + host + " >> " + dest + " switch ports: " + Arrays.toString(ports.toArray()));
 		else
@@ -269,11 +268,6 @@ public class Multicast implements IOFMessageListener, IFloodlightModule, IMultic
 		// translate the list into a list of actions
 		ArrayList<OFAction> actionList = new ArrayList<OFAction>();
 		if (ports != null) {
-			if (isUDP)
-				mb.setExact(MatchField.IP_PROTO, IpProtocol.UDP);
-			else
-				mb.setExact(MatchField.IP_PROTO, IpProtocol.ICMP);
-
 			if (ports.size() != 0) {
 				for (OFPort port : ports)
 					actionList.add(

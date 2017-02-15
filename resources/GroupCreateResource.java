@@ -2,7 +2,7 @@ package net.floodlightcontroller.multicast.resources;
 
 import java.io.IOException;
 
-import org.restlet.resource.Post;
+import org.restlet.resource.Put;
 import org.restlet.resource.ServerResource;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -12,7 +12,7 @@ import net.floodlightcontroller.multicast.IMulticastREST;
 
 // resource used to create a group
 public class GroupCreateResource extends ServerResource {
-	@Post
+	@Put
 	public String Create(String json) {
 		boolean ret;
 		ObjectMapper mapper = new ObjectMapper();
