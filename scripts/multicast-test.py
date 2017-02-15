@@ -75,7 +75,7 @@ def restCreateGroup(groupAddr):
 
 	try:
 		http = urllib3.PoolManager()
-		res = http.request('POST',
+		res = http.request('PUT',
 			url, headers={'Content-Type': 'application/json'},
 			body=encoded_body)
 	except:
@@ -100,7 +100,8 @@ def restGroupInfo(groupAddr):
 		print("Please, start FloodLight")
 		print("Unexpected error: ", sys.exc_info()[0])
 		sys.exit(2)
-	 
+
+	print("group info: " + str(groupAddr))
 	print("http status: " + str(res.status))
 	print("http response: " + str(res.data,'utf-8'))
 
@@ -177,7 +178,7 @@ def main(argv):
 	sleepTime=2
 
 	try:
-		opts, args = getopt.getopt(argv, "hg:p:cjrsm:iI:C:aS:", ["help", "group=", "port=", "create", "join=", "recv", "send", "message=", "groupinfo", "groupsinfo=", "count", "alternate","sleep="])
+		opts, args = getopt.getopt(argv, "hg:p:cjrsm:iIC:aS:", ["help", "group=", "port=", "create", "join=", "recv", "send", "message=", "groupinfo", "groupsinfo=", "count", "alternate","sleep="])
 	except getopt.GetoptError:
 		help()
 		sys.exit(2)
